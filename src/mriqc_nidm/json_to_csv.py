@@ -17,16 +17,15 @@ Author: Adapted from stuff2NIDM for mriqc-nidm_bidsapp
 
 import json
 import logging
-import os
 import platform
 import re
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
 
-def remove_keys(my_dict: Dict, keys_to_remove: list) -> Dict:
+def remove_keys(my_dict: Dict, keys_to_remove: List[str]) -> Dict:
     """
     Create a new dictionary without the specified keys.
 
@@ -133,8 +132,6 @@ def extract_bids_info(
         >>> extract_bids_info(Path('sub-02_task-rest_run-1_bold.json'), {}, logger)
         ('02', '01', 'rest', '1')
     """
-    json_file_path = Path(json_file_path)
-
     # Extract from BIDS metadata if available
     if "bids_meta" in json_data:
         bids_meta = json_data["bids_meta"]
@@ -145,9 +142,16 @@ def extract_bids_info(
         # Fallback to filename parsing
         filename = json_file_path.name
         subj = "unknown"
-        datatype = "unknown"
 
-        # Parse BIDS filename pattern
+        # Infer datatype from filename for more robust task assignment
+        if "_T1w" in filename or "_T2w" in filename:
+            datatype = "anat"
+        elif "_bold" in filename:
+            datatype = "func"
+        else:
+            datatype = "unknown"
+
+        # Parse BIDS filename pattern for subject
         if filename.startswith("sub-"):
             subj = filename.split("_")[0].replace("sub-", "")
             logger.debug(f"Extracted subject from filename: {subj}")
@@ -244,9 +248,6 @@ def convert_mriqc_json_to_csv(
             formatter = logging.Formatter("%(levelname)s: %(message)s")
             handler.setFormatter(formatter)
             logger.addHandler(handler)
-
-    json_file = Path(json_file)
-    output_csv = Path(output_csv)
 
     logger.info(f"Converting MRIQC JSON to CSV: {json_file} -> {output_csv}")
 

@@ -159,7 +159,7 @@ def test_extract_bids_info_minimal_filename(logger):
 
     assert subj == "42"
     assert ses == "01"  # Default
-    assert task == ""
+    assert task == "None"  # Anatomical data (T1w) has task="None"
     assert run == ""
 
 
@@ -194,7 +194,12 @@ def test_convert_mriqc_json_to_csv_success(sample_mriqc_json, logger):
         assert metadata_path.exists()
 
         # Verify CSV contents (read with string dtypes for BIDS identifiers)
-        df = pd.read_csv(csv_path, dtype={"subject_id": str, "ses": str, "task": str, "run": str})
+        # keep_default_na=False prevents pandas from interpreting "None" string as NaN
+        df = pd.read_csv(
+            csv_path,
+            dtype={"subject_id": str, "ses": str, "task": str, "run": str},
+            keep_default_na=False,
+        )
         assert len(df) == 1
 
         # Check required NIDM fields were added
@@ -206,6 +211,7 @@ def test_convert_mriqc_json_to_csv_success(sample_mriqc_json, logger):
 
         assert df["subject_id"][0] == "01"
         assert df["ses"][0] == "01"
+        assert df["task"][0] == "None"  # Anatomical data (T1w) has task="None"
 
         # Check unwanted fields were removed
         assert "bids_meta" not in df.columns
@@ -271,7 +277,11 @@ def test_convert_mriqc_json_to_csv_functional_data(logger):
         output_csv = Path(tmpdir) / "output.csv"
         csv_path, _ = convert_mriqc_json_to_csv(json_file, output_csv, logger)
 
-        df = pd.read_csv(csv_path, dtype={"subject_id": str, "ses": str, "task": str, "run": str})
+        df = pd.read_csv(
+            csv_path,
+            dtype={"subject_id": str, "ses": str, "task": str, "run": str},
+            keep_default_na=False,
+        )
         assert df["subject_id"][0] == "02"
         assert df["task"][0] == "rest"
         assert df["run"][0] == "2"
