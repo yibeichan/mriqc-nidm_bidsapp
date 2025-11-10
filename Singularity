@@ -31,7 +31,7 @@ From: nipreps/mriqc:latest
         click \
         pybids && \
     pip install --no-cache-dir pynidm nidmresults && \
-    pip install -e .
+    pip install --no-deps -e .
 
 %environment
     # Add opt to Python path

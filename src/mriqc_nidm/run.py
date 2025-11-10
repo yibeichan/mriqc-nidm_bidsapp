@@ -136,8 +136,8 @@ def process_subject(
         if nidm_input_dir:
             # Custom NIDM input directory specified
             # Use shared search logic to ensure consistency
-            nidm_subject_dir = nidm_input_dir / f"sub-{subject_id}"
-            existing_nidm = _search_nidm_in_directory(nidm_subject_dir, logger)
+            nidm_input_subject_dir = nidm_input_dir / f"sub-{subject_id}"
+            existing_nidm = _search_nidm_in_directory(nidm_input_subject_dir, logger)
         else:
             # Convention-based location: BIDS/../NIDM/
             existing_nidm = detect_existing_nidm(bids_dir, subject_id, logger)
@@ -150,13 +150,12 @@ def process_subject(
             logger.warning(f"No MRIQC output directory found for sub-{subject_id}: {subject_mriqc_dir}")
             return False
 
-        # Find all MRIQC JSON files - dynamically discover datatype directories
-        # This makes the code future-proof for new MRIQC datatypes
-        json_files = []
-        for datatype_dir in subject_mriqc_dir.iterdir():
-            if datatype_dir.is_dir():
-                # Sort for deterministic processing order
-                json_files.extend(sorted(datatype_dir.glob("*.json")))
+        # Find all MRIQC JSON files recursively
+        # This handles both session and non-session datasets:
+        # - Non-session: sub-01/anat/*.json, sub-01/func/*.json
+        # - Session: sub-01/ses-01/anat/*.json, sub-01/ses-01/func/*.json
+        # Sort for deterministic processing order
+        json_files = sorted(subject_mriqc_dir.rglob("*.json"))
 
         if not json_files:
             logger.warning(f"No MRIQC JSON files found for sub-{subject_id}")
@@ -169,8 +168,8 @@ def process_subject(
             return True
 
         # Step 3: Process each MRIQC JSON file
-        nidm_subject_dir = output_dir / "nidm" / f"sub-{subject_id}"
-        nidm_subject_dir.mkdir(parents=True, exist_ok=True)
+        nidm_output_subject_dir = output_dir / "nidm" / f"sub-{subject_id}"
+        nidm_output_subject_dir.mkdir(parents=True, exist_ok=True)
 
         # Get data dictionary path
         dictionary_csv = get_mriqc_dictionary()
@@ -181,7 +180,7 @@ def process_subject(
         copied_nidm = None
         if existing_nidm:
             copied_nidm = copy_nidm_to_output(
-                existing_nidm, nidm_subject_dir, logger
+                existing_nidm, nidm_output_subject_dir, logger
             )
             logger.info(f"Will augment existing NIDM: {copied_nidm}")
 
@@ -192,7 +191,7 @@ def process_subject(
             logger.info(f"Converting {json_file.name}")
 
             # Step 3b: Convert JSON → CSV
-            csv_file = nidm_subject_dir / f"{json_file.stem}.csv"
+            csv_file = nidm_output_subject_dir / f"{json_file.stem}.csv"
             try:
                 csv_path, software_csv_path = convert_mriqc_json_to_csv(
                     json_file, csv_file, logger
@@ -210,7 +209,7 @@ def process_subject(
                 ttl_file = copied_nidm
             else:
                 # Standalone mode: Create separate TTL for each JSON
-                ttl_file = nidm_subject_dir / f"{json_file.stem}.ttl"
+                ttl_file = nidm_output_subject_dir / f"{json_file.stem}.ttl"
 
             try:
                 success = convert_csv_to_nidm(
@@ -237,7 +236,7 @@ def process_subject(
             if not copied_nidm:
                 try:
                     ttl_path, jsonld_path = convert_nidm_formats(
-                        ttl_file, nidm_subject_dir, subject_id, logger
+                        ttl_file, nidm_output_subject_dir, subject_id, logger
                     )
                     logger.info(f"Created NIDM outputs: {ttl_path.name}, {jsonld_path.name}")
                 except Exception as e:
@@ -248,7 +247,7 @@ def process_subject(
         if copied_nidm:
             try:
                 ttl_path, jsonld_path = convert_nidm_formats(
-                    copied_nidm, nidm_subject_dir, subject_id, logger
+                    copied_nidm, nidm_output_subject_dir, subject_id, logger
                 )
                 logger.info(f"Created augmented NIDM outputs: {ttl_path.name}, {jsonld_path.name}")
             except Exception as e:

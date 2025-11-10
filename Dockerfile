@@ -31,7 +31,7 @@ RUN micromamba install -n base -y -c conda-forge \
         click \
         pybids && \
     pip install --no-cache-dir pynidm nidmresults && \
-    pip install -e .
+    pip install --no-deps -e .
 
 # =======================================
 # Runtime Configuration
