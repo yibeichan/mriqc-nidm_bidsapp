@@ -1,23 +1,42 @@
 FROM nipreps/mriqc:latest
 
-# Install additional required packages
-RUN pip install --no-cache-dir \
-    pandas \
-    nidmresults \
-    rdflib \
-    pybids \
-    pynidm
+# Install minimal system dependencies (conda already provides Python/pip)
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# =======================================
+# Environment Configuration
+# =======================================
+ENV PYTHONPATH=/opt:$PYTHONPATH
+ENV PATH=/usr/local/bin:$PATH
+
+# =======================================
+# BIDS App Setup
+# =======================================
+# Copy application files to /opt
+COPY . /opt/
+
+# Install Python dependencies using conda/pip hybrid approach
 WORKDIR /opt
 
-# Copy the main script and required files
-COPY run.py /opt/
-COPY mriqc_dictionary_v1.csv /opt/
-COPY mriqc_software_metadata.csv /opt/
+# Install conda-forge packages with micromamba (better dependency resolution)
+RUN micromamba install -n base -y -c conda-forge \
+    pandas \
+    rdflib \
+    click \
+    pybids
 
-# Make the script executable
-RUN chmod +x /opt/run.py
+# Install PyPI-only packages using pip (from conda environment)
+RUN pip install --no-cache-dir pynidm nidmresults
 
-# Set the entrypoint to our script
-ENTRYPOINT ["/opt/run.py"] 
+# Install mriqc-nidm package in editable mode
+RUN pip install -e .
+
+# =======================================
+# Runtime Configuration
+# =======================================
+# Entrypoint that expects input/output paths as arguments
+ENTRYPOINT ["python3", "/opt/src/mriqc_nidm/run.py"]

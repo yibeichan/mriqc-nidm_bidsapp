@@ -57,7 +57,7 @@ def build_singularity(output_path=None):
             cmd.append("--fakeroot")
 
         # Add output file and Singularity definition
-        cmd.extend([output_file, "mriqc-nidm.def"])
+        cmd.extend([output_file, "Singularity"])
 
         print(f"Running command: {' '.join(cmd)}")
 

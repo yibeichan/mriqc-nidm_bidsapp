@@ -1,0 +1,110 @@
+Bootstrap: docker
+From: nipreps/mriqc:latest
+
+%files
+    ./src /opt/src
+    ./requirements.txt /opt/requirements.txt
+    ./setup.py /opt/setup.py
+    ./setup.cfg /opt/setup.cfg
+    ./VERSION /opt/VERSION
+
+%post
+    # Create opt directory for application code
+    mkdir -p /opt
+
+    # Install system dependencies (minimal - conda already provides Python/pip)
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        git \
+        build-essential \
+        && apt-get clean && \
+        rm -rf /var/lib/apt/lists/*
+
+    # Install Python dependencies using conda/pip hybrid approach
+    cd /opt
+
+    # Install conda-forge packages with micromamba (better dependency resolution)
+    micromamba install -n base -y -c conda-forge \
+        pandas \
+        rdflib \
+        click \
+        pybids
+
+    # Install PyPI-only packages using pip (from conda environment)
+    pip install --no-cache-dir pynidm nidmresults
+
+    # Install mriqc-nidm package in editable mode
+    pip install -e .
+
+%environment
+    # Add opt to Python path
+    export PYTHONPATH=/opt:$PYTHONPATH
+    # Add Python packages to path
+    export PATH=/usr/local/bin:$PATH
+
+%runscript
+    # Execute the Python entry point (conda environment is already active)
+    python3 /opt/src/mriqc_nidm/run.py "$@"
+
+%help
+    MRIQC-NIDM BIDS App 0.1.0
+
+    A BIDS Application that executes MRIQC (MRI Quality Control) on BIDS datasets
+    and converts output to NIDM (Neuroimaging Data Model) format for improved
+    interoperability.
+
+    Version Information:
+    - MRIQC-NIDM: 0.1.0
+    - MRIQC: latest (from nipreps/mriqc:latest)
+    - Base Image: nipreps/mriqc:latest
+
+    Usage:
+      singularity run -B [workdir] [container] [bids_dir] [output_dir] participant [options]
+
+    Required Arguments:
+      bids_dir          Path to BIDS dataset directory
+      output_dir        Path to output directory
+      participant       Analysis level (only 'participant' supported currently)
+
+    Optional Arguments:
+      --participant-label LABEL [LABEL ...]
+                        Subject label(s) to process (without 'sub-' prefix)
+      --nidm-input-dir PATH
+                        Override default NIDM input location (default: BIDS/../NIDM/)
+      --skip-mriqc      Skip MRIQC execution, use existing output
+      --mriqc-output-dir PATH
+                        Use existing MRIQC output directory
+      --skip-nidm-conversion
+                        Run MRIQC only, skip NIDM conversion
+      -v, --verbose     Enable verbose logging
+
+    Example - Full workflow:
+      singularity run -B $PWD mriqc-nidm.sif \\
+        $PWD/inputs/BIDS \\
+        $PWD/outputs \\
+        participant \\
+        --participant-label 01 02
+
+    Example - With existing NIDM to augment:
+      # Input structure:
+      # /data/
+      #   ├── BIDS/
+      #   └── NIDM/  (existing NIDM files)
+      #       └── sub-01/nidm.ttl
+
+      singularity run -B /data mriqc-nidm.sif \\
+        /data/BIDS \\
+        /data/outputs \\
+        participant \\
+        --participant-label 01
+
+    Example - Convert existing MRIQC output:
+      singularity run -B $PWD mriqc-nidm.sif \\
+        $PWD/inputs/BIDS \\
+        $PWD/outputs \\
+        participant \\
+        --skip-mriqc \\
+        --mriqc-output-dir $PWD/existing_mriqc
+
+    For more information:
+      https://github.com/yibeichan/mriqc-nidm_bidsapp
