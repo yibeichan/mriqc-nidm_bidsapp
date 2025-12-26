@@ -15,7 +15,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from src.mriqc_nidm.mriqc_wrapper import MRIQCWrapper
+from mriqc_nidm.mriqc_wrapper import MRIQCWrapper
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ def test_dirs(tmp_path):
 @pytest.fixture
 def mock_mriqc_version():
     """Mock MRIQC version check."""
-    with patch("src.mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
+    with patch("mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
         mock_result = Mock()
         mock_result.returncode = 0
         mock_result.stdout = "MRIQC v0.16.1\n"
@@ -79,7 +79,7 @@ class TestMRIQCWrapperInit:
 
         assert wrapper.bids_dir == test_dirs["bids_dir"]
         assert wrapper.output_dir == test_dirs["output_dir"]
-        assert wrapper.mriqc_dir == test_dirs["output_dir"] / "mriqc"
+        assert wrapper.mriqc_dir == test_dirs["output_dir"] / "mriqc_nidm" / "mriqc"
         assert wrapper.work_dir == test_dirs["output_dir"] / "work"
 
     def test_init_tracks_results(self, test_dirs, mock_mriqc_version):
@@ -106,7 +106,7 @@ class TestMRIQCWrapperInit:
 
     def test_init_handles_missing_mriqc(self, test_dirs):
         """Test that initialization raises error if MRIQC not found."""
-        with patch("src.mriqc_nidm.mriqc_wrapper.subprocess.run", side_effect=FileNotFoundError):
+        with patch("mriqc_nidm.mriqc_wrapper.subprocess.run", side_effect=FileNotFoundError):
             with pytest.raises(RuntimeError, match="MRIQC is not installed"):
                 MRIQCWrapper(
                     bids_dir=test_dirs["bids_dir"],
@@ -124,7 +124,7 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command()
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir)
 
         assert cmd[0] == "mriqc"
         assert str(test_dirs["bids_dir"]) in cmd
@@ -138,7 +138,7 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command(subject_id="01")
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir, subject_id="01")
 
         assert "--participant-label" in cmd
         assert "01" in cmd
@@ -150,7 +150,7 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command(subject_id="01", session_id="01")
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir, subject_id="01", session_id="01")
 
         assert "--session-id" in cmd
         assert "01" in cmd
@@ -162,7 +162,7 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command(modalities=["T1w", "bold"])
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir, modalities=["T1w", "bold"])
 
         assert cmd.count("-m") == 2
         assert "T1w" in cmd
@@ -175,7 +175,7 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command(nprocs=4, mem_gb=16)
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir, nprocs=4, mem_gb=16)
 
         assert "--nprocs" in cmd
         assert "4" in cmd
@@ -189,7 +189,7 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command(no_sub=True)
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir, no_sub=True)
 
         assert "--no-sub" in cmd
 
@@ -200,7 +200,7 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command(verbose_count=2)
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir, verbose_count=2)
 
         assert cmd.count("-v") == 2
 
@@ -211,10 +211,61 @@ class TestMRIQCWrapperCommands:
             output_dir=test_dirs["output_dir"],
         )
 
-        cmd = wrapper._create_mriqc_command(fd_radius=45.0)
+        cmd = wrapper._create_mriqc_command(output_dir=wrapper.mriqc_dir, fd_radius=45.0)
 
         assert "--fd_radius" in cmd
         assert "45.0" in cmd
+
+    def test_create_command_with_passthrough_kwargs(self, test_dirs, mock_mriqc_version):
+        """Test MRIQC command with passthrough arguments via kwargs."""
+        wrapper = MRIQCWrapper(
+            bids_dir=test_dirs["bids_dir"],
+            output_dir=test_dirs["output_dir"],
+        )
+
+        # Test passthrough args like those from BABS config
+        cmd = wrapper._create_mriqc_command(
+            output_dir=wrapper.mriqc_dir,
+            subject_id="01",
+            mem="16G",  # Passthrough via kwargs
+            omp_nthreads=8,  # Passthrough via kwargs
+            ica=True,  # Boolean flag
+        )
+
+        cmd_str = " ".join(cmd)
+
+        # Check mem is passed through
+        assert "--mem" in cmd
+        assert "16G" in cmd
+
+        # Check omp-nthreads is passed (underscore converted to hyphen)
+        assert "--omp-nthreads" in cmd
+        assert "8" in cmd
+
+        # Check boolean flag
+        assert "--ica" in cmd
+
+    def test_create_command_mem_via_kwargs_not_duplicate(self, test_dirs, mock_mriqc_version):
+        """Test that mem via kwargs doesn't duplicate if mem_gb is also set."""
+        wrapper = MRIQCWrapper(
+            bids_dir=test_dirs["bids_dir"],
+            output_dir=test_dirs["output_dir"],
+        )
+
+        # If both mem_gb (explicit param) and mem (kwargs) are set,
+        # mem_gb takes precedence and mem should be skipped
+        cmd = wrapper._create_mriqc_command(
+            output_dir=wrapper.mriqc_dir,
+            mem_gb=32,  # Explicit parameter
+            mem="16G",  # Via kwargs - should be ignored
+        )
+
+        # Count occurrences of --mem
+        mem_count = cmd.count("--mem")
+        assert mem_count == 1, f"Expected 1 --mem, got {mem_count}"
+
+        # Should use mem_gb value, not mem kwarg
+        assert "32" in cmd
 
 
 class TestMRIQCWrapperProcessing:
@@ -235,7 +286,7 @@ class TestMRIQCWrapperProcessing:
         output_file.write_text("{}")
 
         # Mock subprocess.run
-        with patch("src.mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
+        with patch("mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
             mock_result = Mock()
             mock_result.returncode = 0
             mock_result.stdout = "Success"
@@ -255,7 +306,7 @@ class TestMRIQCWrapperProcessing:
         )
 
         # Mock subprocess failure
-        with patch("src.mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
+        with patch("mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
             mock_result = Mock()
             mock_result.returncode = 1
             mock_result.stderr = "Error occurred"
@@ -279,7 +330,7 @@ class TestMRIQCWrapperProcessing:
         output_file.write_text("{}")
 
         # Mock subprocess (should not be called)
-        with patch("src.mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
+        with patch("mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
             result = wrapper.process_participant(subject_id="01", skip_existing=True)
 
             assert result is True
@@ -302,7 +353,7 @@ class TestMRIQCWrapperProcessing:
             output_file.write_text("{}")
 
         # Mock subprocess
-        with patch("src.mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
+        with patch("mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
             mock_result = Mock()
             mock_result.returncode = 0
             mock_result.stdout = "Success"
@@ -338,13 +389,13 @@ class TestMRIQCWrapperProcessing:
             output_file.write_text("{}")
 
         # Mock BIDSLayout
-        with patch("src.mriqc_nidm.mriqc_wrapper.BIDSLayout") as mock_layout:
+        with patch("mriqc_nidm.mriqc_wrapper.BIDSLayout") as mock_layout:
             mock_layout_instance = Mock()
             mock_layout_instance.get_subjects.return_value = ["01", "02"]
             mock_layout.return_value = mock_layout_instance
 
             # Mock subprocess
-            with patch("src.mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
+            with patch("mriqc_nidm.mriqc_wrapper.subprocess.run") as mock_run:
                 mock_result = Mock()
                 mock_result.returncode = 0
                 mock_result.stdout = "Success"
