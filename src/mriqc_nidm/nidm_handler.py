@@ -2,13 +2,12 @@
 """
 NIDM Handler for MRIQC-NIDM BIDSAPP
 
-This module handles existing NIDM file detection, copying, and format conversion.
+This module handles existing NIDM file detection and copying.
 Follows patterns from freesurfer_bidsapp/src/run.py for NIDM augmentation workflow.
 
 Key features:
 - Detects existing NIDM files following BIDS/../NIDM/ convention
 - Safely copies existing NIDM to output directory
-- Converts between Turtle (.ttl) and JSON-LD (.jsonld) formats
 - Supports NIDM augmentation workflow (adding MRIQC data to existing NIDM)
 
 Author: Adapted from freesurfer_bidsapp for mriqc-nidm_bidsapp
@@ -17,11 +16,7 @@ Author: Adapted from freesurfer_bidsapp for mriqc-nidm_bidsapp
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Optional, Tuple
-
-from rdflib import Graph
-from rdflib.exceptions import ParserError
-from rdflib.plugin import PluginException
+from typing import List, Optional
 
 
 # Module-level constant for supported NIDM file extensions
@@ -192,91 +187,6 @@ def copy_nidm_to_output(
         logger.error(f"  Source: {existing_nidm}")
         logger.error(f"  Destination: {output_path}")
         raise OSError(f"Failed to copy NIDM file: {e}") from e
-
-
-def convert_nidm_formats(
-    input_file: Path,
-    output_dir: Path,
-    subject_id: str,
-    logger: Optional[logging.Logger] = None,
-) -> Tuple[Path, Path]:
-    """
-    Convert NIDM to multiple formats (.ttl and .jsonld).
-
-    Uses rdflib to parse the input NIDM file and serialize to both
-    Turtle (.ttl) and JSON-LD (.jsonld) formats for maximum interoperability.
-
-    Args:
-        input_file: Path to input NIDM file (any RDF format)
-        output_dir: Path to output directory
-        subject_id: Subject identifier (without "sub-" prefix)
-        logger: Optional logger instance
-
-    Returns:
-        Tuple of (ttl_path, jsonld_path)
-
-    Raises:
-        FileNotFoundError: If input_file doesn't exist
-        Exception: If RDF parsing or serialization fails
-
-    Examples:
-        >>> convert_nidm_formats(
-        ...     Path('/temp/sub-01_T1w.ttl'),
-        ...     Path('/output/nidm'),
-        ...     '01',
-        ...     logger
-        ... )
-        (Path('/output/nidm/sub-01_T1w.ttl'), Path('/output/nidm/sub-01_T1w.jsonld'))
-
-    Notes:
-        - Automatically detects input format using rdflib
-        - Output filenames preserve input filename stem (prevents overwrites)
-        - Creates output directory if it doesn't exist
-        - Preserves all RDF triples during conversion
-        - JSON-LD format is useful for web applications
-        - Turtle format is preferred for human readability
-    """
-    # Setup default logger if not provided
-    if logger is None:
-        logger = logging.getLogger(__name__)
-
-    # Validate input file exists
-    if not input_file.exists():
-        logger.error(f"Input NIDM file not found: {input_file}")
-        raise FileNotFoundError(f"NIDM file not found: {input_file}")
-
-    # Create output directory if needed
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Converting NIDM formats for subject: {subject_id}")
-    logger.debug(f"  Input: {input_file}")
-
-    try:
-        # Load RDF graph (rdflib auto-detects format)
-        graph = Graph()
-        graph.parse(input_file)
-        logger.debug(f"  Loaded {len(graph)} RDF triples")
-
-        # Define output paths - preserve input filename stem
-        # This ensures multiple scans don't overwrite each other
-        base_name = input_file.stem
-        ttl_output = output_dir / f"{base_name}.ttl"
-        jsonld_output = output_dir / f"{base_name}.jsonld"
-
-        # Serialize to Turtle format
-        graph.serialize(destination=str(ttl_output), format="turtle")
-        logger.info(f"  Created Turtle: {ttl_output}")
-
-        # Serialize to JSON-LD format
-        graph.serialize(destination=str(jsonld_output), format="json-ld")
-        logger.info(f"  Created JSON-LD: {jsonld_output}")
-
-        return ttl_output, jsonld_output
-
-    except (OSError, ParserError, PluginException) as e:
-        logger.error(f"Failed to convert NIDM formats: {e}")
-        logger.error(f"  Input file: {input_file}")
-        raise RuntimeError(f"NIDM format conversion failed: {e}") from e
 
 
 def get_supported_nidm_formats() -> List[str]:

@@ -1,4 +1,4 @@
-FROM nipreps/mriqc:latest
+FROM nipreps/mriqc:25.0.0rc0
 
 # Install minimal system dependencies (conda already provides Python/pip)
 RUN apt-get update && apt-get install -y \
@@ -30,7 +30,7 @@ RUN micromamba install -n base -y -c conda-forge \
         rdflib \
         click \
         pybids && \
-    pip install --no-cache-dir pynidm nidmresults && \
+    pip install --no-cache-dir pynidm==4.2.3 nidmresults && \
     pip install --no-deps -e .
 
 # =======================================

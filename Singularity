@@ -1,5 +1,5 @@
 Bootstrap: docker
-From: nipreps/mriqc:latest
+From: nipreps/mriqc:25.0.0rc0
 
 %files
     ./src /opt/src
@@ -30,7 +30,7 @@ From: nipreps/mriqc:latest
         rdflib \
         click \
         pybids && \
-    pip install --no-cache-dir pynidm nidmresults && \
+    pip install --no-cache-dir pynidm==4.2.3 nidmresults && \
     pip install --no-deps -e .
 
 %environment
@@ -41,7 +41,7 @@ From: nipreps/mriqc:latest
 
 %runscript
     # Execute the Python entry point (conda environment is already active)
-    python3 /opt/src/mriqc_nidm/run.py "$@"
+    mriqc-nidm "$@"
 
 %help
     MRIQC-NIDM BIDS App 0.1.0
@@ -81,6 +81,21 @@ From: nipreps/mriqc:latest
         $PWD/outputs \\
         participant \\
         --participant-label 01 02
+
+    Example - BABS-style label (with sub- prefix):
+      singularity run -B $PWD mriqc-nidm.sif \\
+        $PWD/inputs/BIDS \\
+        $PWD/outputs \\
+        participant \\
+        --participant-label sub-01
+
+    Example - Specifying working directory for cluster:
+      singularity run -B $PWD mriqc-nidm.sif \\
+        $PWD/inputs/BIDS \\
+        $PWD/outputs \\
+        participant \\
+        --participant-label 01 \\
+        --work-dir /scratch/mriqc_work
 
     Example - With existing NIDM to augment:
       # Input structure:

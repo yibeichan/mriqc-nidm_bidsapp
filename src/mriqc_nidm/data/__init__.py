@@ -52,8 +52,34 @@ def get_software_metadata_template() -> Path:
     return DATA_DIR / "mriqc_software_metadata.csv"
 
 
+def get_data_file(filename: str) -> Path:
+    """
+    Get path to a data file in the data directory.
+
+    Args:
+        filename: Name of the data file
+
+    Returns:
+        Path to the data file
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+
+    Examples:
+        >>> from mriqc_nidm.data import get_data_file
+        >>> dict_path = get_data_file("mriqc_dictionary_v1.csv")
+        >>> dict_path.exists()
+        True
+    """
+    file_path = DATA_DIR / filename
+    if not file_path.exists():
+        raise FileNotFoundError(f"Data file not found: {filename}")
+    return file_path
+
+
 __all__ = [
     "DATA_DIR",
     "get_mriqc_dictionary",
     "get_software_metadata_template",
+    "get_data_file",
 ]

@@ -51,7 +51,7 @@ class MRIQCWrapper:
         """
         self.bids_dir = Path(bids_dir)
         self.output_dir = Path(output_dir)
-        self.mriqc_dir = self.output_dir / "mriqc"
+        self.mriqc_dir = self.output_dir / "mriqc_nidm" / "mriqc"
         self.work_dir = Path(work_dir) if work_dir else self.output_dir / "work"
 
         # Track processing results
@@ -98,6 +98,7 @@ class MRIQCWrapper:
 
     def _create_mriqc_command(
         self,
+        output_dir: Path,
         subject_id: Optional[str] = None,
         session_id: Optional[str] = None,
         modalities: Optional[List[str]] = None,
@@ -113,6 +114,8 @@ class MRIQCWrapper:
 
         Parameters
         ----------
+        output_dir : Path
+            Subject-specific output directory for MRIQC results
         subject_id : str, optional
             Subject ID to process (without 'sub-' prefix)
         session_id : str, optional
@@ -137,7 +140,7 @@ class MRIQCWrapper:
         list
             Command list for subprocess
         """
-        cmd = ["mriqc", str(self.bids_dir), str(self.mriqc_dir), "participant"]
+        cmd = ["mriqc", str(self.bids_dir), str(output_dir), "participant"]
 
         # Working directory
         cmd.extend(["-w", str(self.work_dir)])
@@ -173,9 +176,12 @@ class MRIQCWrapper:
         for _ in range(verbose_count):
             cmd.append("-v")
 
-        # Additional kwargs
+        # Additional kwargs (handles passthrough arguments from CLI)
         for key, value in kwargs.items():
-            if value is True:
+            # Special handling for 'mem' (CLI uses --mem, wrapper uses mem_gb)
+            if key == "mem" and mem_gb is None:
+                cmd.extend(["--mem", str(value)])
+            elif value is True:
                 cmd.append(f"--{key.replace('_', '-')}")
             elif value is not False and value is not None:
                 cmd.extend([f"--{key.replace('_', '-')}", str(value)])
@@ -208,6 +214,7 @@ class MRIQCWrapper:
     def process_participant(
         self,
         subject_id: str,
+        subject_output_dir: Optional[Path] = None,
         session_id: Optional[str] = None,
         modalities: Optional[List[str]] = None,
         skip_existing: bool = True,
@@ -220,6 +227,9 @@ class MRIQCWrapper:
         ----------
         subject_id : str
             Subject ID (without 'sub-' prefix)
+        subject_output_dir : Path, optional
+            Subject-specific output directory (e.g., output_dir/sub-01/mriqc/)
+            If None, uses default mriqc_dir
         session_id : str, optional
             Session ID (without 'ses-' prefix)
         modalities : list of str, optional
@@ -236,14 +246,23 @@ class MRIQCWrapper:
         """
         participant_id = self._get_participant_identifier(subject_id, session_id)
 
+        # Use subject-specific output directory if provided, otherwise use default
+        output_dir = subject_output_dir if subject_output_dir else self.mriqc_dir
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         logger.info(
-            f"Processing subject: {participant_id}"
+            f"Processing subject: {participant_id} → {output_dir}"
         )
 
         try:
             # Check if already processed
             if skip_existing:
-                existing_outputs = self.find_mriqc_outputs(subject_id, session_id)
+                existing_outputs = self.find_mriqc_outputs(
+                    subject_id=subject_id,
+                    session_id=session_id,
+                    search_dir=output_dir
+                )
                 if existing_outputs:
                     logger.info(f"{participant_id} already processed. Skipping...")
                     self.results["skipped"].append(participant_id)
@@ -251,6 +270,7 @@ class MRIQCWrapper:
 
             # Create MRIQC command
             cmd = self._create_mriqc_command(
+                output_dir=output_dir,
                 subject_id=subject_id,
                 session_id=session_id,
                 modalities=modalities,
@@ -273,7 +293,11 @@ class MRIQCWrapper:
                 return False
 
             # Verify outputs were created
-            outputs = self.find_mriqc_outputs(subject_id, session_id)
+            outputs = self.find_mriqc_outputs(
+                subject_id=subject_id,
+                session_id=session_id,
+                search_dir=output_dir
+            )
             if not outputs:
                 logger.warning(
                     f"MRIQC completed but no outputs found for {participant_id}"
@@ -362,6 +386,7 @@ class MRIQCWrapper:
         self,
         subject_id: str,
         session_id: Optional[str] = None,
+        search_dir: Optional[Path] = None,
         modality: Optional[str] = None,
     ) -> List[Path]:
         """
@@ -373,6 +398,8 @@ class MRIQCWrapper:
             Subject ID (without 'sub-' prefix)
         session_id : str, optional
             Session ID (without 'ses-' prefix)
+        search_dir : Path, optional
+            Directory to search in (if None, uses self.mriqc_dir)
         modality : str, optional
             Modality to filter (e.g., 'T1w', 'bold')
 
@@ -388,9 +415,18 @@ class MRIQCWrapper:
         if session_id:
             pattern += f"_ses-{session_id}"
 
+        # Use provided search_dir or default to mriqc_dir
+        base_dir = search_dir if search_dir else self.mriqc_dir
+
         # Search in MRIQC output directory
-        subject_dir = self.mriqc_dir / f"sub-{subject_id}"
-        if session_id:
+        # Note: In subject-centric mode, search_dir is already subject-specific (e.g., sub-01/mriqc/)
+        # In legacy mode, we need to append sub-01
+        if "sub-" not in str(base_dir):
+            subject_dir = base_dir / f"sub-{subject_id}"
+        else:
+            subject_dir = base_dir
+
+        if session_id and "ses-" not in str(subject_dir):
             subject_dir = subject_dir / f"ses-{session_id}"
 
         if not subject_dir.exists():

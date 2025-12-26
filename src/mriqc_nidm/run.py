@@ -18,19 +18,81 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from . import __version__
-from .csv_to_nidm import check_csv2nidm_available, convert_csv_to_nidm
-from .data import get_mriqc_dictionary
-from .json_to_csv import convert_mriqc_json_to_csv
-from .mriqc_wrapper import MRIQCWrapper
-from .nidm_handler import (
+from mriqc_nidm import __version__
+from mriqc_nidm.csv_to_nidm import check_csv2nidm_available, convert_csv_to_nidm
+from mriqc_nidm.data import get_mriqc_dictionary
+from mriqc_nidm.json_to_csv import convert_mriqc_json_to_csv
+from mriqc_nidm.mriqc_wrapper import MRIQCWrapper
+from mriqc_nidm.nidm_handler import (
     _search_nidm_in_directory,
-    convert_nidm_formats,
     copy_nidm_to_output,
     detect_existing_nidm,
 )
+
+
+def normalize_label(label: str, prefix: str) -> str:
+    """
+    Normalize a BIDS label by stripping prefix if present.
+
+    Makes the code robust to both formats:
+    - With prefix: 'sub-0051456' → '0051456'
+    - Without prefix: '0051456' → '0051456'
+
+    Args:
+        label: The label to normalize
+        prefix: The prefix to strip (e.g., 'sub-', 'ses-')
+
+    Returns:
+        Label without the prefix
+    """
+    return label[len(prefix):] if label.startswith(prefix) else label
+
+
+def parse_mriqc_args(extra_args: List[str]) -> Dict[str, Any]:
+    """
+    Parse MRIQC extra arguments into kwargs dictionary.
+
+    Converts command-line style arguments into a dictionary suitable for
+    passing to MRIQCWrapper. Handles both key-value pairs and boolean flags.
+
+    Examples:
+        ['--mem', '16G', '--nprocs', '12'] → {'mem': '16G', 'nprocs': 12}
+        ['--ica', '--no-sub'] → {'ica': True, 'no_sub': True}
+
+    Args:
+        extra_args: List of command-line arguments not recognized by mriqc-nidm
+
+    Returns:
+        Dictionary of parsed arguments with underscored keys
+    """
+    mriqc_kwargs: Dict[str, Any] = {}
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+        if arg.startswith("--"):
+            key = arg[2:].replace("-", "_")  # --omp-nthreads → omp_nthreads
+            # Check if next arg is a value or another flag
+            if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("-"):
+                value: Any = extra_args[i + 1]
+                # Try to convert to int/float if possible
+                try:
+                    value = int(value)
+                except ValueError:
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        pass  # Keep as string
+                mriqc_kwargs[key] = value
+                i += 2
+            else:
+                # Boolean flag
+                mriqc_kwargs[key] = True
+                i += 1
+        else:
+            i += 1
+    return mriqc_kwargs
 
 
 def setup_logging(output_dir: Path, verbose: bool = False) -> logging.Logger:
@@ -77,7 +139,7 @@ def create_dataset_description(output_dir: Path, logger: logging.Logger) -> Path
     Returns:
         Path to created dataset_description.json
     """
-    nidm_dir = output_dir / "nidm"
+    nidm_dir = output_dir / "mriqc_nidm" / "nidm"
     nidm_dir.mkdir(parents=True, exist_ok=True)
 
     dataset_desc = {
@@ -150,12 +212,18 @@ def process_subject(
             logger.warning(f"No MRIQC output directory found for sub-{subject_id}: {subject_mriqc_dir}")
             return False
 
-        # Find all MRIQC JSON files recursively
+        # Find all MRIQC IQM JSON files recursively
         # This handles both session and non-session datasets:
         # - Non-session: sub-01/anat/*.json, sub-01/func/*.json
         # - Session: sub-01/ses-01/anat/*.json, sub-01/ses-01/func/*.json
+        # IMPORTANT: Filter out non-IQM files like *_timeseries.json which are
+        # confounds sidecar files containing metadata, not IQM values
         # Sort for deterministic processing order
-        json_files = sorted(subject_mriqc_dir.rglob("*.json"))
+        all_json_files = subject_mriqc_dir.rglob("*.json")
+        json_files = sorted([
+            f for f in all_json_files
+            if not f.name.endswith("_timeseries.json")
+        ])
 
         if not json_files:
             logger.warning(f"No MRIQC JSON files found for sub-{subject_id}")
@@ -168,30 +236,39 @@ def process_subject(
             return True
 
         # Step 3: Process each MRIQC JSON file
-        nidm_output_subject_dir = output_dir / "nidm" / f"sub-{subject_id}"
-        nidm_output_subject_dir.mkdir(parents=True, exist_ok=True)
+        # Output directly to nidm/ folder (no per-subject subfolder)
+        nidm_output_dir = output_dir / "mriqc_nidm" / "nidm"
+        nidm_output_dir.mkdir(parents=True, exist_ok=True)
 
         # Get data dictionary path
         dictionary_csv = get_mriqc_dictionary()
 
-        # Step 3a: Copy existing NIDM ONCE (before loop) if available
+        # Define canonical subject TTL file (ONE file per subject)
+        # All scans (T1w, bold, etc.) are merged into this single file
+        subject_ttl_file = nidm_output_dir / f"sub-{subject_id}.ttl"
+
+        # Step 3a: Copy existing NIDM and prepare augmentation target
         # CRITICAL: Must copy once before loop, not inside loop!
-        # Otherwise each iteration overwrites previous augmentations
-        copied_nidm = None
+        augmentation_target = None
         if existing_nidm:
             copied_nidm = copy_nidm_to_output(
-                existing_nidm, nidm_output_subject_dir, logger
+                existing_nidm, nidm_output_dir, logger
             )
-            logger.info(f"Will augment existing NIDM: {copied_nidm}")
+            # Rename to canonical name if different
+            if copied_nidm != subject_ttl_file:
+                copied_nidm.rename(subject_ttl_file)
+                logger.info(f"Renamed copied NIDM to canonical name: {subject_ttl_file.name}")
+            augmentation_target = subject_ttl_file
+            logger.info(f"Will augment existing NIDM: {subject_ttl_file}")
 
         # Track failures to return accurate status
         any_scan_failed = False
 
-        for json_file in json_files:
-            logger.info(f"Converting {json_file.name}")
+        for idx, json_file in enumerate(json_files):
+            logger.info(f"Converting {json_file.name} ({idx + 1}/{len(json_files)})")
 
             # Step 3b: Convert JSON → CSV
-            csv_file = nidm_output_subject_dir / f"{json_file.stem}.csv"
+            csv_file = nidm_output_dir / f"{json_file.stem}.csv"
             try:
                 csv_path, software_csv_path = convert_mriqc_json_to_csv(
                     json_file, csv_file, logger
@@ -202,22 +279,17 @@ def process_subject(
                 continue
 
             # Step 3c: Convert CSV → NIDM
-            # If augmenting, use the copied NIDM file (already copied before loop)
-            # If standalone, create new file for this JSON
-            if copied_nidm:
-                # Augmentation mode: All JSONs augment the same copied NIDM
-                ttl_file = copied_nidm
-            else:
-                # Standalone mode: Create separate TTL for each JSON
-                ttl_file = nidm_output_subject_dir / f"{json_file.stem}.ttl"
+            # All scans go into the same canonical TTL file
+            # First scan creates it, subsequent scans augment it
+            existing_nidm_arg = augmentation_target if augmentation_target and augmentation_target.exists() else None
 
             try:
                 success = convert_csv_to_nidm(
                     csv_file=csv_path,
                     dictionary_csv=dictionary_csv,
                     software_metadata_csv=software_csv_path,
-                    output_ttl=ttl_file,
-                    existing_nidm=copied_nidm,  # Augment if available
+                    output_ttl=subject_ttl_file,
+                    existing_nidm=existing_nidm_arg,
                     logger=logger,
                 )
 
@@ -226,32 +298,19 @@ def process_subject(
                     any_scan_failed = True
                     continue
 
+                # After first successful conversion, set augmentation target
+                # so subsequent scans augment the same file
+                if not augmentation_target:
+                    augmentation_target = subject_ttl_file
+
             except Exception as e:
                 logger.error(f"Error during NIDM conversion: {e}")
                 any_scan_failed = True
                 continue
 
-            # Step 3d: Convert to multiple formats (.ttl and .jsonld)
-            # Only do this for standalone mode (one file per JSON)
-            if not copied_nidm:
-                try:
-                    ttl_path, jsonld_path = convert_nidm_formats(
-                        ttl_file, nidm_output_subject_dir, subject_id, logger
-                    )
-                    logger.info(f"Created NIDM outputs: {ttl_path.name}, {jsonld_path.name}")
-                except Exception as e:
-                    logger.warning(f"Failed to create JSON-LD format: {e}")
-                    # TTL file already exists, so this is not critical
-
-        # Step 3e: For augmentation mode, convert final NIDM to formats ONCE
-        if copied_nidm:
-            try:
-                ttl_path, jsonld_path = convert_nidm_formats(
-                    copied_nidm, nidm_output_subject_dir, subject_id, logger
-                )
-                logger.info(f"Created augmented NIDM outputs: {ttl_path.name}, {jsonld_path.name}")
-            except Exception as e:
-                logger.warning(f"Failed to create JSON-LD format: {e}")
+        # Log final output
+        if subject_ttl_file.exists():
+            logger.info(f"Created consolidated NIDM: {subject_ttl_file}")
 
         if any_scan_failed:
             logger.warning(f"Some scans failed to process for subject: sub-{subject_id}")
@@ -269,6 +328,19 @@ def main():
     """Main entry point for MRIQC-NIDM BIDSAPP."""
     parser = argparse.ArgumentParser(
         description="MRIQC-NIDM BIDS App - Execute MRIQC and convert to NIDM format",
+        epilog="""
+MRIQC Arguments:
+  Any additional arguments not listed above are passed directly to MRIQC.
+  Common MRIQC options include:
+    --mem          Maximum memory available (e.g., '16G')
+    --nprocs       Maximum number of parallel processes
+    --omp-nthreads Maximum number of threads per process
+    --no-sub       Disable anonymized metrics submission (default behavior)
+    --ica          Run ICA denoising
+    --fd-radius    Framewise displacement radius (default: 50mm)
+
+  For full MRIQC options, see: https://mriqc.readthedocs.io/
+""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -327,7 +399,8 @@ def main():
         version=f"MRIQC-NIDM BIDSAPP v{__version__}",
     )
 
-    args = parser.parse_args()
+    # Use parse_known_args to capture MRIQC-specific arguments
+    args, mriqc_extra_args = parser.parse_known_args()
 
     # Validate paths
     if not args.bids_dir.exists():
@@ -354,7 +427,7 @@ def main():
         skip_mriqc = True
         logger.info(f"Using existing MRIQC output: {mriqc_dir}")
     else:
-        mriqc_dir = args.output_dir / "mriqc"
+        mriqc_dir = args.output_dir / "mriqc_nidm" / "mriqc"
         skip_mriqc = args.skip_mriqc
 
     # Validate MRIQC directory if skipping execution
@@ -366,8 +439,12 @@ def main():
         return 1
 
     # Get list of subjects to process
+    # Normalize labels to strip 'sub-' prefix if present
+    # This makes the code robust to both formats:
+    #   --participant-label 0051456
+    #   --participant-label sub-0051456
     if args.participant_label:
-        subjects = args.participant_label
+        subjects = [normalize_label(s, "sub-") for s in args.participant_label]
     else:
         # Find all subjects in MRIQC output (if exists) or BIDS directory
         if mriqc_dir.exists():
@@ -384,19 +461,26 @@ def main():
     # Run MRIQC if not skipped
     if not skip_mriqc:
         logger.info("Running MRIQC quality control...")
+
+        # Parse extra MRIQC arguments passed through from command line
+        mriqc_kwargs = parse_mriqc_args(mriqc_extra_args)
+        if mriqc_kwargs:
+            logger.info(f"MRIQC extra arguments: {mriqc_kwargs}")
+
         try:
             mriqc_wrapper = MRIQCWrapper(
                 bids_dir=args.bids_dir,
                 output_dir=args.output_dir,
             )
 
-            # Process participants
+            # Process participants with extra MRIQC args
             for subject_id in subjects:
                 logger.info(f"Running MRIQC for sub-{subject_id}")
                 try:
                     mriqc_wrapper.process_participant(
                         subject_id=subject_id,
                         verbose_count=1 if args.verbose else 0,
+                        **mriqc_kwargs,
                     )
                 except Exception as e:
                     logger.error(f"MRIQC failed for sub-{subject_id}: {e}")
