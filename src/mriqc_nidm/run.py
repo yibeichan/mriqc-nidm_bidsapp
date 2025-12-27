@@ -15,6 +15,7 @@ Follows BIDS Apps specification and patterns from freesurfer_bidsapp.
 import argparse
 import json
 import logging
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -243,9 +244,19 @@ def process_subject(
         # Get data dictionary path
         dictionary_csv = get_mriqc_dictionary()
 
-        # Define canonical subject TTL file (ONE file per subject)
+        # Extract session info from first JSON file (if present)
+        # BABS runs session by session, so all files in one run share the same session
+        # Filename pattern: sub-01_ses-01_T1w.json or sub-01_T1w.json
+        session_match = re.search(r"_ses-([a-zA-Z0-9]+)", json_files[0].name)
+        session_id = session_match.group(1) if session_match else None
+
+        # Define canonical TTL file (ONE file per subject/session)
         # All scans (T1w, bold, etc.) are merged into this single file
-        subject_ttl_file = nidm_output_dir / f"sub-{subject_id}.ttl"
+        if session_id:
+            subject_ttl_file = nidm_output_dir / f"sub-{subject_id}_ses-{session_id}.ttl"
+            logger.info(f"Session detected: ses-{session_id}")
+        else:
+            subject_ttl_file = nidm_output_dir / f"sub-{subject_id}.ttl"
 
         # Step 3a: Copy existing NIDM and prepare augmentation target
         # CRITICAL: Must copy once before loop, not inside loop!

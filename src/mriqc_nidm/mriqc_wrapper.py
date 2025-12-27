@@ -179,8 +179,12 @@ class MRIQCWrapper:
         # Additional kwargs (handles passthrough arguments from CLI)
         for key, value in kwargs.items():
             # Special handling for 'mem' (CLI uses --mem, wrapper uses mem_gb)
-            if key == "mem" and mem_gb is None:
-                cmd.extend(["--mem", str(value)])
+            if key == "mem":
+                if mem_gb is None:
+                    # Only use mem kwarg if mem_gb was not set
+                    cmd.extend(["--mem", str(value)])
+                # else: Skip - mem_gb parameter takes precedence
+                continue
             elif value is True:
                 cmd.append(f"--{key.replace('_', '-')}")
             elif value is not False and value is not None:
