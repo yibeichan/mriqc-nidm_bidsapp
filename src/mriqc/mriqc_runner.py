@@ -51,7 +51,7 @@ class MRIQCWrapper:
         """
         self.bids_dir = Path(bids_dir)
         self.output_dir = Path(output_dir)
-        self.mriqc_dir = self.output_dir / "mriqc_nidm" / "mriqc"
+        self.mriqc_dir = self.output_dir / "mriqc-nidm_bidsapp" / "mriqc"
         self.work_dir = Path(work_dir) if work_dir else self.output_dir / "work"
 
         # Track processing results
@@ -179,8 +179,12 @@ class MRIQCWrapper:
         # Additional kwargs (handles passthrough arguments from CLI)
         for key, value in kwargs.items():
             # Special handling for 'mem' (CLI uses --mem, wrapper uses mem_gb)
-            if key == "mem" and mem_gb is None:
-                cmd.extend(["--mem", str(value)])
+            if key == "mem":
+                if mem_gb is None:
+                    # Only use mem kwarg if mem_gb was not set
+                    cmd.extend(["--mem", str(value)])
+                # else: Skip - mem_gb parameter takes precedence
+                continue
             elif value is True:
                 cmd.append(f"--{key.replace('_', '-')}")
             elif value is not False and value is not None:
