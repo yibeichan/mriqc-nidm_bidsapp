@@ -1,5 +1,5 @@
 {
-    "mriqc_nidm_bidsapp": {
+    "mriqc-nidm": {
         "version": "0.1.0",
         "source": "setup.py"
     },

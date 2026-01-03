@@ -40,12 +40,12 @@ A BIDS App that runs MRIQC quality control on neuroimaging data and converts the
 
 This repository uses consistent naming:
 - **Repository name:** `mriqc-nidm_bidsapp` (this GitHub repository)
-- **Package name:** `mriqc-nidm_bidsapp` (installed via pip)
+- **Package name:** `mriqc-nidm` (installed via pip)
 - **CLI command:** `mriqc-nidm` (shorter for usability)
-- **Output directory:** `mriqc-nidm_bidsapp/` (created in output folder)
-- **Container name:** `mriqc-nidm-bidsapp-<version>`
+- **Output directory:** `mriqc-nidm/` (created in output folder)
+- **Container name:** `mriqc-nidm-<version>`
 
-The CLI command (`mriqc-nidm`) is intentionally shorter than the package/output names for better user experience.
+The CLI command (`mriqc-nidm`) matches the package name for consistency.
 
 ## Installation
 
@@ -53,24 +53,24 @@ The CLI command (`mriqc-nidm`) is intentionally shorter than the package/output 
 
 1. Build the container:
 ```bash
-apptainer build mriqc-nidm_bidsapp.sif Singularity
+apptainer build mriqc-nidm.sif Singularity
 ```
 
 2. Run the container:
 ```bash
-apptainer run mriqc-nidm_bidsapp.sif /path/to/mriqc/output /path/to/output participant
+apptainer run mriqc-nidm.sif /path/to/mriqc/output /path/to/output participant
 ```
 
 ### Using Docker
 
 1. Build the container:
 ```bash
-docker build -t mriqc-nidm_bidsapp .
+docker build -t mriqc-nidm .
 ```
 
 2. Run the container:
 ```bash
-docker run -v /path/to/mriqc/output:/data -v /path/to/output:/out mriqc-nidm_bidsapp /data /out participant
+docker run -v /path/to/mriqc/output:/data -v /path/to/output:/out mriqc-nidm /data /out participant
 ```
 
 ## Usage
@@ -104,7 +104,7 @@ mriqc-nidm <bids_dir> <output_dir> participant \
 
 ```
 output_dir/
-└── mriqc-nidm_bidsapp/          # All outputs packaged together
+└── mriqc-nidm/          # All outputs packaged together
     ├── mriqc/                   # MRIQC outputs (JSON, HTML, figures)
     │   └── sub-{id}/
     │       └── [ses-{label}/]   # Session subdirectory if applicable

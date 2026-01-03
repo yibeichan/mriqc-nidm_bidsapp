@@ -11,7 +11,7 @@ def get_version():
     version_file = Path(__file__).parent / "VERSION"
     with open(version_file) as f:
         data = json.load(f)
-        return data["mriqc_nidm_bidsapp"]["version"]
+        return data["mriqc-nidm"]["version"]
 
 
 def read_requirements():
@@ -109,7 +109,7 @@ if len(sys.argv) > 1 and sys.argv[1] in ["docker", "singularity", "containers"]:
         sys.exit(0)
 
 setup(
-    name="mriqc-nidm_bidsapp",
+    name="mriqc-nidm",
     version=get_version(),
     description="BIDS App for MRIQC with NIDM Output",
     author="ReproNim",
