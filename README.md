@@ -42,10 +42,10 @@ This repository uses consistent naming:
 - **Repository name:** `mriqc-nidm_bidsapp` (this GitHub repository)
 - **Package name:** `mriqc-nidm` (installed via pip)
 - **CLI command:** `mriqc-nidm` (shorter for usability)
-- **Output directory:** `mriqc-nidm/` (created in output folder)
-- **Container name:** `mriqc-nidm-<version>`
+- **Output directory:** `mriqc-nidm_bidsapp/` (created in output folder)
+- **Container name:** `mriqc-nidm_bidsapp-<version>`
 
-The CLI command (`mriqc-nidm`) matches the package name for consistency.
+The package name (`mriqc-nidm`) is shorter for usability, while output directory matches repository name.
 
 ## Installation
 
@@ -53,24 +53,24 @@ The CLI command (`mriqc-nidm`) matches the package name for consistency.
 
 1. Build the container:
 ```bash
-apptainer build mriqc-nidm.sif Singularity
+apptainer build mriqc-nidm_bidsapp.sif Singularity
 ```
 
 2. Run the container:
 ```bash
-apptainer run mriqc-nidm.sif /path/to/mriqc/output /path/to/output participant
+apptainer run mriqc-nidm_bidsapp.sif /path/to/mriqc/output /path/to/output participant
 ```
 
 ### Using Docker
 
 1. Build the container:
 ```bash
-docker build -t mriqc-nidm .
+docker build -t mriqc-nidm_bidsapp .
 ```
 
 2. Run the container:
 ```bash
-docker run -v /path/to/mriqc/output:/data -v /path/to/output:/out mriqc-nidm /data /out participant
+docker run -v /path/to/mriqc/output:/data -v /path/to/output:/out mriqc-nidm_bidsapp /data /out participant
 ```
 
 ## Usage
@@ -104,7 +104,7 @@ mriqc-nidm <bids_dir> <output_dir> participant \
 
 ```
 output_dir/
-└── mriqc-nidm/          # All outputs packaged together
+└── mriqc-nidm_bidsapp/          # All outputs packaged together
     ├── mriqc/                   # MRIQC outputs (JSON, HTML, figures)
     │   └── sub-{id}/
     │       └── [ses-{label}/]   # Session subdirectory if applicable

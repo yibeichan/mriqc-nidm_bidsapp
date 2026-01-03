@@ -24,7 +24,7 @@ def build_docker():
     """Build Docker container"""
     print("Building Docker image...")
     try:
-        subprocess.run(["docker", "build", "-t", "mriqc-nidm", "."], check=True)
+        subprocess.run(["docker", "build", "-t", "mriqc-nidm_bidsapp", "."], check=True)
         print("Docker image built successfully")
     except subprocess.CalledProcessError as e:
         print(f"Docker build failed: {e}")
@@ -42,9 +42,9 @@ def build_singularity(output_path=None):
         ):
             print("\nDetected Apptainer on cluster environment.")
             print("For cluster environments, please build directly with apptainer:")
-            print("\napptainer build --remote mriqc-nidm.sif mriqc-nidm.def")
+            print("\napptainer build --remote mriqc-nidm_bidsapp.sif Singularity")
             print("or")
-            print("apptainer build --fakeroot mriqc-nidm.sif mriqc-nidm.def\n")
+            print("apptainer build --fakeroot mriqc-nidm_bidsapp.sif Singularity\n")
             return False
         elif (
             subprocess.run(["which", "singularity"], capture_output=True).returncode == 0
@@ -55,7 +55,7 @@ def build_singularity(output_path=None):
             return False
 
         # Use custom output path if provided, otherwise use default
-        output_file = output_path if output_path else "mriqc-nidm.sif"
+        output_file = output_path if output_path else "mriqc-nidm_bidsapp.sif"
         output_file = str(Path(output_file).resolve())
 
         # Build command
@@ -77,9 +77,9 @@ def build_singularity(output_path=None):
     except subprocess.CalledProcessError as e:
         print(f"Build failed: {e}")
         print("\nFor cluster environments, please build directly with apptainer:")
-        print("apptainer build --remote mriqc-nidm.sif mriqc-nidm.def")
+        print("apptainer build --remote mriqc-nidm_bidsapp.sif Singularity")
         print("or")
-        print("apptainer build --fakeroot mriqc-nidm.sif mriqc-nidm.def")
+        print("apptainer build --fakeroot mriqc-nidm_bidsapp.sif Singularity")
         return False
 
 

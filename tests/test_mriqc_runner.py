@@ -79,7 +79,7 @@ class TestMRIQCWrapperInit:
 
         assert wrapper.bids_dir == test_dirs["bids_dir"]
         assert wrapper.output_dir == test_dirs["output_dir"]
-        assert wrapper.mriqc_dir == test_dirs["output_dir"] / "mriqc-nidm" / "mriqc"
+        assert wrapper.mriqc_dir == test_dirs["output_dir"] / "mriqc-nidm_bidsapp" / "mriqc"
         assert wrapper.work_dir == test_dirs["output_dir"] / "work"
 
     def test_init_tracks_results(self, test_dirs, mock_mriqc_version):

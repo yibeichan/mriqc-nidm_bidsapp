@@ -123,7 +123,7 @@ def process_subject(
             logger.info(f"Session detected: ses-{session_id}")
 
         # Build subject/session specific NIDM output directory (standards compliant)
-        base_nidm_dir = output_dir / "mriqc-nidm" / "nidm"
+        base_nidm_dir = output_dir / "mriqc-nidm_bidsapp" / "nidm"
         subject_nidm_dir = build_nidm_output_path(base_nidm_dir, subject_id, session_id)
         subject_nidm_dir.mkdir(parents=True, exist_ok=True)
         logger.debug(f"NIDM output directory: {subject_nidm_dir}")
@@ -323,7 +323,7 @@ MRIQC Arguments:
         skip_mriqc = True
         logger.info(f"Using existing MRIQC output: {mriqc_dir}")
     else:
-        mriqc_dir = args.output_dir / "mriqc-nidm" / "mriqc"
+        mriqc_dir = args.output_dir / "mriqc-nidm_bidsapp" / "mriqc"
         skip_mriqc = args.skip_mriqc
 
     # Validate MRIQC directory if skipping execution
