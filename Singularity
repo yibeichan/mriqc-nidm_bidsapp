@@ -76,21 +76,21 @@ From: nipreps/mriqc:25.0.0rc0
       -v, --verbose     Enable verbose logging
 
     Example - Full workflow:
-      singularity run -B $PWD mriqc-nidm.sif \\
+      singularity run -B $PWD mriqc-nidm_bidsapp.sif \\
         $PWD/inputs/BIDS \\
         $PWD/outputs \\
         participant \\
         --participant-label 01 02
 
     Example - BABS-style label (with sub- prefix):
-      singularity run -B $PWD mriqc-nidm.sif \\
+      singularity run -B $PWD mriqc-nidm_bidsapp.sif \\
         $PWD/inputs/BIDS \\
         $PWD/outputs \\
         participant \\
         --participant-label sub-01
 
     Example - Specifying working directory for cluster:
-      singularity run -B $PWD mriqc-nidm.sif \\
+      singularity run -B $PWD mriqc-nidm_bidsapp.sif \\
         $PWD/inputs/BIDS \\
         $PWD/outputs \\
         participant \\
@@ -104,14 +104,14 @@ From: nipreps/mriqc:25.0.0rc0
       #   └── NIDM/  (existing NIDM files)
       #       └── sub-01/nidm.ttl
 
-      singularity run -B /data mriqc-nidm.sif \\
+      singularity run -B /data mriqc-nidm_bidsapp.sif \\
         /data/BIDS \\
         /data/outputs \\
         participant \\
         --participant-label 01
 
     Example - Convert existing MRIQC output:
-      singularity run -B $PWD mriqc-nidm.sif \\
+      singularity run -B $PWD mriqc-nidm_bidsapp.sif \\
         $PWD/inputs/BIDS \\
         $PWD/outputs \\
         participant \\

@@ -40,12 +40,12 @@ A BIDS App that runs MRIQC quality control on neuroimaging data and converts the
 
 This repository uses consistent naming:
 - **Repository name:** `mriqc-nidm_bidsapp` (this GitHub repository)
-- **Package name:** `mriqc-nidm_bidsapp` (installed via pip)
+- **Package name:** `mriqc-nidm` (installed via pip)
 - **CLI command:** `mriqc-nidm` (shorter for usability)
 - **Output directory:** `mriqc-nidm_bidsapp/` (created in output folder)
-- **Container name:** `mriqc-nidm-bidsapp-<version>`
+- **Container name:** `mriqc-nidm_bidsapp-<version>`
 
-The CLI command (`mriqc-nidm`) is intentionally shorter than the package/output names for better user experience.
+The package name (`mriqc-nidm`) is shorter for usability, while output directory matches repository name.
 
 ## Installation
 

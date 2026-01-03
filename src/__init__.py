@@ -15,7 +15,7 @@ def get_version():
     try:
         with open(version_file) as f:
             data = json.load(f)
-            return data["mriqc_nidm_bidsapp"]["version"]
+            return data["mriqc-nidm"]["version"]
     except (FileNotFoundError, KeyError, json.JSONDecodeError):
         return "0.1.0"
 
